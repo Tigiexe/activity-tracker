@@ -8,6 +8,8 @@ __pycache__/
 .eggs/
 dist/
 build/
+packaging/friends/.pyi-spec/
+/*.spec
 
 # Secrets & local database
 .env

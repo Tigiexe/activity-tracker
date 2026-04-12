@@ -1,6 +1,7 @@
 import ctypes
 import json
 import socket
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -169,9 +170,11 @@ def classify_activity(
 
 def load_config(path: Path) -> CollectorConfig:
     raw = json.loads(path.read_text(encoding="utf-8"))
+    rk = raw.get("api_key")
+    api_key = resolve_api_key("" if rk is None else str(rk), path)
     return CollectorConfig(
         server_url=raw["server_url"],
-        api_key=raw["api_key"],
+        api_key=api_key,
         device_id=raw.get("device_id") or socket.gethostname(),
         sampling_interval_default_sec=int(raw.get("sampling_interval_default_sec", 4)),
         sampling_interval_stable_sec=int(raw.get("sampling_interval_stable_sec", 12)),
@@ -222,6 +225,49 @@ def load_config(path: Path) -> CollectorConfig:
 
 def _split_csv(value: str) -> List[str]:
     return [x.strip().lower() for x in value.split(",") if x.strip()]
+
+
+def read_activity_api_key_from_dotenv(dotenv_path: Path) -> str:
+    """Parse ACTIVITY_API_KEY from a simple KEY=value .env file (no deps)."""
+    if not dotenv_path.is_file():
+        return ""
+    try:
+        text = dotenv_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.upper().startswith("ACTIVITY_API_KEY="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+def resolve_api_key(raw: str, config_path: Path) -> str:
+    """
+    If api_key is empty or 'from-dotenv', load ACTIVITY_API_KEY from .env.
+    Search order:
+      - frozen (.exe): folder next to config.json (same folder as server .env in release zip)
+      - source: repo root .env, then collector/.env
+    """
+    key = (raw or "").strip()
+    if key and key.lower() != "from-dotenv":
+        return key
+    candidates: List[Path] = []
+    if getattr(sys, "frozen", False):
+        candidates.append(config_path.parent / ".env")
+    else:
+        candidates.append(config_path.parent.parent / ".env")
+        candidates.append(config_path.parent / ".env")
+    for p in candidates:
+        v = read_activity_api_key_from_dotenv(p)
+        if v:
+            return v
+    raise SystemExit(
+        "Collector api_key is empty or 'from-dotenv' but ACTIVITY_API_KEY was not found in .env. "
+        "Start the server once (it creates .env) or set api_key in config.json."
+    )
 
 
 def load_games_list_file(path: Path) -> List[str]:
@@ -517,7 +563,13 @@ def run_collector(config_path: Path) -> None:
 
 
 if __name__ == "__main__":
-    cfg = Path(__file__).parent / "config.json"
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+        cfg = base / "config.json"
+    else:
+        cfg = Path(__file__).parent / "config.json"
     if not cfg.exists():
-        raise SystemExit("Missing config file: collector/config.json (copy from config.example.json)")
+        raise SystemExit(
+            "Missing config.json next to the collector (copy from collector/config.example.json)."
+        )
     run_collector(cfg)

@@ -6,7 +6,7 @@ Lightweight local-first activity tracking: a small FastAPI app plus an optional 
 
 | Situation | What to do |
 |-----------|------------|
-| **Friend / single Windows PC** | Use **Path A** (scripts or manual). The API binds to **localhost** by default; data stays on that machine. |
+| **Friend / single Windows PC** | Prefer a **pre-built zip** from this repo’s **Releases** page (no Python). Otherwise **Path A** (Python + one-time setup). |
 | **Linux or Mac, server only** (no Windows collector on that box) | **Path B** — install `requirements.txt` and run `python serve.py`. |
 | **Docker on a VPS** | **Path C** — `docker compose up` after creating `.env`. |
 | **Collector on PC, API on another machine** | Run the API on the host with `ACTIVITY_HOST=0.0.0.0` (and firewall + strong API key). Point `collector/config.json` `server_url` at `http://YOUR_SERVER:8000/ingest/events`. |
@@ -15,7 +15,38 @@ Lightweight local-first activity tracking: a small FastAPI app plus an optional 
 
 **Run command:** Prefer **`python serve.py`** from the project root. It reads **`ACTIVITY_HOST`** and **`ACTIVITY_PORT`** from `.env` (defaults: `127.0.0.1` and `8000`). Use `uvicorn ... --host ...` only if you prefer the CLI over `.env`.
 
-### Path A — One Windows PC (easiest for friends)
+## Friend install: how complicated is it?
+
+### Easiest — pre-built Windows zip (no Python, no scripts)
+
+**What your friend does (about 2 minutes):**
+
+1. Download **`ActivityTracker-Windows-Friends.zip`** from the repo’s **Releases** page (you need to upload it once — see *Maintainer: friend zip* below).
+2. Unzip anywhere; keep **`ActivityTrackerServer.exe`**, **`ActivityTrackerCollector.exe`**, **`config.json`**, and **`START-HERE.txt`** in the **same folder**.
+3. Double-click **`ActivityTrackerServer.exe`**. First run creates **`.env`** and **`data\`** here and may open the browser to the dashboard. **Leave the window open.**
+4. Double-click **`ActivityTrackerCollector.exe`**. It picks up **`ACTIVITY_API_KEY`** from **`.env`** (`config.json` uses `"api_key": "from-dotenv"`). **Leave that window open too.**
+
+**Caveats:** Windows only for this bundle; large download (~tens of MB); first launch can take a few seconds (one-file exe unpacks). If **SmartScreen** appears: **More info → Run anyway** (exes are not code-signed unless you add signing later).
+
+### More involved — Python on the same PC (Path A below)
+
+Requires installing Python, running setup once, and two starter scripts or batch files. Fine for people who already use dev tools.
+
+### Without a pre-built zip
+
+There is **no** supported way to run this on Windows **without either** Python **or** a bundled `.exe`: the stack is Python-based. macOS/Linux friends can run the **API only** with Python (**Path B**); the **collector stays Windows-only**.
+
+### Maintainer: friend zip (you, before sharing)
+
+From the project root (with `.venv` already created, e.g. after `scripts\setup-local.ps1`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\friends\build-windows.ps1
+```
+
+This produces **`dist\ActivityTracker-Windows-Friends.zip`**. Attach it to a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository). Friends only download the zip — they do not clone the repo.
+
+### Path A — One Windows PC (Python + scripts)
 
 1. Install [Python 3.11+](https://www.python.org/downloads/) and enable **Add to PATH**.
 2. Clone or unzip this repo and open a terminal in the project folder.

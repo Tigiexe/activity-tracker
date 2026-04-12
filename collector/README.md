@@ -10,7 +10,7 @@ Low-overhead background collector for active app/window activity.
    - `copy collector\\config.example.json collector\\config.json`
 3. Edit `collector\\config.json`:
    - Set `server_url` to your ingest URL (same PC: `http://127.0.0.1:8000/ingest/events`; remote: `http://HOST:8000/ingest/events` or HTTPS).
-   - Set `api_key` to match **`ACTIVITY_API_KEY`** in the API `.env`.
+   - Set `api_key` to match **`ACTIVITY_API_KEY`** in the API `.env`, **or** use **`"from-dotenv"`** (or leave **`""`**) to read the key from **`.env`**: repo root when running from source, or the folder next to **`ActivityTrackerCollector.exe`** in the friend zip.
    - Set `device_id` to your PC name.
    - Optional: copy `games_list.example.txt` to **`games_list.txt`** (same folder as `config.json`). Put one game substring per line (or comma-separated); `#` starts a comment. The collector **merges** this file with the **server** list from **`/admin/games`** whenever `sync_settings_from_server` is true. Game detection is not stored in `config.json`.
 

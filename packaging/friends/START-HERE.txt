@@ -1,0 +1,18 @@
+Activity Tracker — quick start (Windows, pre-built)
+
+1) Put all files in the same folder (this folder).
+
+2) Double-click ActivityTrackerServer.exe
+   - First run creates .env and a data folder here.
+   - A browser tab may open to the dashboard.
+   - Keep this window open.
+
+3) Double-click ActivityTrackerCollector.exe
+   - Uses the API key from .env automatically (config.json says from-dotenv).
+   - Keep this window open too.
+
+4) Use the dashboard at http://127.0.0.1:8000
+
+If Windows SmartScreen blocks the apps: More info → Run anyway (the executables are not code-signed).
+
+To stop: close both windows. Your data stays in the data folder.
