@@ -954,6 +954,24 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
           .hoverbox {{ margin-top: 8px; padding: 8px; border: 1px solid #334155; border-radius: 8px; color: #cbd5e1; font-size: 12px; line-height: 1.45; background: #0b1220; max-height: 240px; overflow-y: auto; white-space: normal; }}
           .timeline-tooltip {{ position: fixed; z-index: 9999; max-width: 320px; display:none; pointer-events:none; padding:10px 12px; border-radius:10px; border:1px solid #334155; background: rgba(2,6,23,0.95); color:#e2e8f0; font-size:12px; box-shadow:0 8px 26px rgba(0,0,0,0.35); }}
           .timeline-tooltip .k {{ color:#93c5fd; font-weight:600; }}
+          .tl-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }}
+          .tl-toolbar form {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }}
+          .btn-tl {{
+            font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 9px;
+            cursor: pointer; transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease, border-color 0.15s ease;
+          }}
+          .btn-tl:hover {{ filter: brightness(1.06); box-shadow: 0 4px 16px rgba(0,0,0,0.22); }}
+          .btn-tl:active {{ transform: scale(0.98); }}
+          .btn-tl-apply {{
+            border: none; color: #f8fafc;
+            background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 45%, #0284c7 100%);
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255,255,255,0.12);
+          }}
+          .btn-tl-compact {{
+            color: #e2e8f0; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid #475569; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.15);
+          }}
+          .btn-tl-compact:hover {{ border-color: #94a3b8; filter: brightness(1.08); }}
         </style>
       </head>
       <body>
@@ -1001,22 +1019,24 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
         </div>
         <div class="card" style="margin-bottom: 16px;">
           <h2>Day Timeline (00:00-24:00)</h2>
-          <form method="post" action="/admin/timeline/apply-preset" style="margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="tl-toolbar">
+          <form method="post" action="/admin/timeline/apply-preset">
             <input type="hidden" name="day" value="{selected_iso}" />
             <label class="muted">Preset:</label>
-            <select name="preset_name" style="padding:6px 8px; border-radius:8px; border:1px solid #334155; background:#0b1220; color:#e2e8f0;">
+            <select name="preset_name" style="padding:7px 10px; border-radius:8px; border:1px solid #334155; background:#0b1220; color:#e2e8f0;">
               <option value="legacy" {'selected' if current_preset == 'legacy' else ''}>Legacy</option>
               <option value="conservative" {'selected' if current_preset == 'conservative' else ''}>Conservative</option>
               <option value="balanced" {'selected' if current_preset == 'balanced' else ''}>Balanced</option>
               <option value="aggressive" {'selected' if current_preset == 'aggressive' else ''}>Aggressive</option>
             </select>
-            <button type="submit">Apply preset</button>
+            <button type="submit" class="btn-tl btn-tl-apply">Apply preset</button>
             <span class="muted">Current: same_app={preview_merge_same_app}, browser_gap={preview_gap_browser}s, bridge={preview_bridge}s, min_frag={preview_min_fragment}s, dom={preview_dom_threshold}%</span>
           </form>
-          <form method="post" action="/admin/timeline/compact-day" style="margin-bottom:8px;">
+          <form method="post" action="/admin/timeline/compact-day">
             <input type="hidden" name="day" value="{selected_iso}" />
-            <button type="submit">Rebuild/Compact this day</button>
+            <button type="submit" class="btn-tl btn-tl-compact">Rebuild / compact this day</button>
           </form>
+          </div>
           <div class="timeline-wrap" id="timelineWrap" style="height:{timeline_height_px}px;">
             <div class="timeline-grid"></div>
             {timeline_graph_html}
