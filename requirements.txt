@@ -1,9 +1,9 @@
+# Backend / API (Windows, Linux, macOS). Use alone on a VPS or Linux box.
+# On Windows with the activity collector, also install: pip install -r requirements-windows.txt
 fastapi
 uvicorn[standard]
 pydantic-settings
 orjson
-psutil
-pywin32
 requests
 python-multipart
 tzdata

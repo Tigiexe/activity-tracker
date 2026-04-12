@@ -1,0 +1,4 @@
+# Full install on Windows: API + Windows collector (psutil, pywin32).
+-r requirements.txt
+psutil
+pywin32

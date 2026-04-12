@@ -1,0 +1,9 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.env
+data
+collector/spool
+collector/config.json

@@ -1,23 +1,72 @@
 # Activity Tracker
 
-Lightweight local-first activity tracking system.
+Lightweight local-first activity tracking: a small FastAPI app plus an optional Windows collector. **You do not need a cloud server or VPS** — everything can run on one PC. Hosting on a small server is optional if you want 24/7 uptime or to collect from multiple machines.
 
-## Phase 1 (implemented)
+## Pick a setup
+
+| Situation | What to do |
+|-----------|------------|
+| **Friend / single Windows PC** | Use **Path A** (scripts or manual). The API binds to **localhost** by default; data stays on that machine. |
+| **Linux or Mac, server only** (no Windows collector on that box) | **Path B** — install `requirements.txt` and run `python serve.py`. |
+| **Docker on a VPS** | **Path C** — `docker compose up` after creating `.env`. |
+| **Collector on PC, API on another machine** | Run the API on the host with `ACTIVITY_HOST=0.0.0.0` (and firewall + strong API key). Point `collector/config.json` `server_url` at `http://YOUR_SERVER:8000/ingest/events`. |
+
+**Dependencies:** `requirements.txt` is the **cross-platform** API stack (no Windows-only packages). On Windows, if you run the collector, install **`requirements-windows.txt`** (includes `psutil` and `pywin32`). The collector is **Windows-only**; the API runs on Windows, Linux, or macOS.
+
+**Run command:** Prefer **`python serve.py`** from the project root. It reads **`ACTIVITY_HOST`** and **`ACTIVITY_PORT`** from `.env` (defaults: `127.0.0.1` and `8000`). Use `uvicorn ... --host ...` only if you prefer the CLI over `.env`.
+
+### Path A — One Windows PC (easiest for friends)
+
+1. Install [Python 3.11+](https://www.python.org/downloads/) and enable **Add to PATH**.
+2. Clone or unzip this repo and open a terminal in the project folder.
+3. Run **`scripts\setup-local.bat`** (double-click) or in PowerShell: **`.\scripts\setup-local.ps1`**  
+   If PowerShell blocks scripts, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`  
+   - Creates `.venv`, installs **`requirements-windows.txt`**, copies **`.env.example` → `.env`** and **`collector\config.example.json` → `collector\config.json`** if missing.
+4. Edit **`.env`**: set **`ACTIVITY_API_KEY`** to something long and random (not `change-me` if anyone else can reach your network).
+5. Edit **`collector\config.json`**: set **`api_key`** to the **same** value; keep **`server_url`** as `http://127.0.0.1:8000/ingest/events` for local-only.
+6. Start the API: **`scripts\run-server.bat`** or **`.\scripts\run-server.ps1`** → open **http://127.0.0.1:8000**
+7. Start tracking: **`scripts\run-collector.bat`** or **`.\scripts\run-collector.ps1`** in a second window.
+
+Leave **`ACTIVITY_HOST=127.0.0.1`** so the dashboard is not exposed to your LAN unless you intend that.
+
+### Path B — Linux / macOS (API only)
+
+```bash
+cd activitytracker
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# edit .env: ACTIVITY_API_KEY; use ACTIVITY_HOST=127.0.0.1 for local-only or 0.0.0.0 for LAN/VPS
+python serve.py
+```
+
+### Path C — Docker (optional VPS)
+
+```bash
+cp .env.example .env
+# edit .env — set ACTIVITY_API_KEY (compose sets ACTIVITY_HOST=0.0.0.0 inside the container)
+docker compose up --build -d
+```
+
+Open **http://SERVER_IP:8000**. Put a reverse proxy with HTTPS in front for anything exposed to the internet.
+
+### Hosted / LAN API (optional)
+
+- Set **`ACTIVITY_HOST=0.0.0.0`** in `.env` so the app listens on all interfaces.
+- Use a **strong** **`ACTIVITY_API_KEY`**; prefer **HTTPS** (Caddy, nginx, Traefik, etc.) on a public server.
+- Windows **Firewall**: allow port **8000** only on trusted networks, or only from specific IPs.
+
+### Dev reload
+
+Set **`ACTIVITY_DEV_RELOAD=true`** in the environment when running **`python serve.py`** to enable uvicorn auto-reload (development only).
+
+## Implemented features (summary)
 - FastAPI backend
 - SQLite storage (WAL mode)
 - API key-protected ingest endpoint
 - Health endpoint
-
-## Local setup (Windows or Ubuntu)
-1. Create and activate a virtual environment.
-2. Install dependencies:
-   - `pip install -r requirements.txt`
-3. Copy env file:
-   - `copy .env.example .env` (Windows PowerShell)
-   - `cp .env.example .env` (Linux)
-4. Set `ACTIVITY_API_KEY` in `.env`.
-5. Run server:
-   - `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000`
+- Windows collector (see `collector/README.md`)
 
 ## Git & GitHub
 
@@ -111,18 +160,13 @@ curl -X POST "http://127.0.0.1:8000/ingest/events" \
   }'
 ```
 
-## Next phase
-- Windows collector script with low-overhead sampling and batching.
+## Windows collector
 
-## Windows collector (phase 2)
-- Files:
-  - `collector/collector.py`
-  - `collector/config.example.json`
-- Setup:
-  - `copy collector\\config.example.json collector\\config.json`
-  - edit `collector\\config.json` with your server URL and API key
-- Run:
-  - `python collector\\collector.py`
+- Files: `collector/collector.py`, `collector/config.example.json` (see **`collector/README.md`**).
+- **Same PC as the API:** use `server_url` `http://127.0.0.1:8000/ingest/events` and the same `api_key` as in `.env`.
+- **Remote API:** set `server_url` to `http://YOUR_HOST:8000/ingest/events` (HTTPS if you terminate TLS in front of the app).
+- Install on Windows with **`pip install -r requirements-windows.txt`** (or run **`scripts\setup-local.ps1`**).
+- Run: `python collector\collector.py` or **`scripts\run-collector.bat`**
 
 ## Daily rollup job
 - Computes materialized `daily_metrics` rows used by summary APIs and future notifications.
