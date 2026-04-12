@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+orjson
+psutil
+pywin32
+requests
+python-multipart
+tzdata
+Pillow

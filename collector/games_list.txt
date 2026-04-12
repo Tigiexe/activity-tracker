@@ -1,0 +1,210 @@
+# Copy to games_list.txt (same folder as config.json).
+# One substring per line and/or comma-separated. # starts a comment.
+# Matched case-insensitively against active window EXE name + window title.
+# This file is merged with the server list from /admin/games when sync_settings_from_server is true.
+
+road to vostok
+pathologic 2
+this war of mine
+this war of mine: the little ones
+this war of mine: stories
+red dead redemption 2
+celeste
+the witcher 3: wild hunt
+sid meier’s civilization vi
+portal
+half-life 2: episode one
+left 4 dead 2
+dayz
+dirt rally
+assetto corsa
+euro truck simulator 2
+titanfall 2
+ark: survival evolved
+condition zero
+unrailed!
+rainbow six siege
+rust
+terraria
+half-life
+half-life 2
+arma 3
+garry’s mod
+payday 2
+mirror’s edge
+cities: skylines
+rocket league
+h1z1
+battlefield: bad company 2
+unturned
+grand theft auto v
+grand theft auto iv
+grand theft auto: san andreas
+grand theft auto: vice city
+the elder scrolls v: skyrim
+the elder scrolls iv: oblivion
+fallout 4
+fallout: new vegas
+fallout 3
+cyberpunk 2077
+starfield
+elden ring
+dark souls
+dark souls ii
+dark souls iii
+sekiro: shadows die twice
+bloodborne
+the legend of zelda: breath of the wild
+the legend of zelda: tears of the kingdom
+super mario odyssey
+super mario bros. wonder
+minecraft
+roblox
+fortnite
+apex legends
+call of duty: modern warfare
+call of duty: warzone
+call of duty: black ops iii
+call of duty: black ops ii
+battlefield 1
+battlefield v
+battlefield 2042
+overwatch 2
+valorant
+counter-strike 2
+team fortress 2
+dota 2
+league of legends
+world of warcraft
+diablo iii
+diablo iv
+hades
+dead cells
+hollow knight
+cuphead
+undertale
+stardew valley
+factorio
+satisfactory
+rimworld
+oxygen not included
+slay the spire
+balatro
+the binding of isaac: rebirth
+enter the gungeon
+risk of rain 2
+subnautica
+subnautica: below zero
+no man’s sky
+outer wilds
+kerbal space program
+the forest
+sons of the forest
+phasmophobia
+lethal company
+among us
+fall guys
+human: fall flat
+gang beasts
+totally accurate battle simulator
+totally accurate battlegrounds
+insurgency: sandstorm
+squad
+hell let loose
+escape from tarkov
+ready or not
+rainbow six extraction
+ghost recon wildlands
+ghost recon breakpoint
+far cry 3
+far cry 4
+far cry 5
+far cry 6
+assassin’s creed ii
+assassin’s creed iv: black flag
+assassin’s creed origins
+assassin’s creed odyssey
+assassin’s creed valhalla
+watch dogs
+watch dogs 2
+watch dogs: legion
+hitman
+hitman 2
+hitman 3
+metal gear solid v: the phantom pain
+resident evil 2 remake
+resident evil 3 remake
+resident evil 4 remake
+resident evil 7
+resident evil village
+the last of us part i
+the last of us part ii
+god of war
+god of war ragnarök
+uncharted 4: a thief’s end
+spider-man remastered
+spider-man: miles morales
+horizon zero dawn
+horizon forbidden west
+days gone
+death stranding
+control
+alan wake
+alan wake 2
+quantum break
+max payne 3
+baldur’s gate 3
+divinity: original sin 2
+disco elysium
+dragon age: inquisition
+mass effect legendary edition
+mass effect 2
+mass effect 3
+the sims 4
+the sims 3
+cities: skylines ii
+simcity
+planet coaster
+planet zoo
+rollercoaster tycoon 2
+football manager 2024
+fifa 23
+ea sports fc 24
+nba 2k24
+forza horizon 5
+forza motorsport
+need for speed: most wanted
+need for speed heat
+burnout paradise
+trackmania
+wreckfest
+doom
+doom eternal
+quake
+wolfenstein: the new order
+wolfenstein ii: the new colossus
+prey
+dishonored
+dishonored 2
+bioshock
+bioshock 2
+bioshock infinite
+borderlands 2
+borderlands 3
+tiny tina’s wonderlands
+warframe
+destiny 2
+halo: the master chief collection
+halo infinite
+gears 5
+sea of thieves
+valheim
+v rising
+project zomboid
+7 days to die
+don’t starve
+don’t starve together
+starbound
+core keeper
+dave the diver
+dredge

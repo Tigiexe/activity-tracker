@@ -1,0 +1,26 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Secrets & local database
+.env
+data/
+*.db
+
+# Collector: real config and upload spool (use config.example.json)
+collector/config.json
+collector/spool/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

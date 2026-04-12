@@ -1,0 +1,48 @@
+{
+  "server_url": "http://127.0.0.1:8000/ingest/events",
+  "api_key": "change-me",
+  "device_id": "main-pc",
+  "sampling_interval_default_sec": 4,
+  "sampling_interval_stable_sec": 12,
+  "stable_after_sec": 60,
+  "sampling_interval_game_sec": 15,
+  "upload_interval_sec": 20,
+  "max_batch_size": 100,
+  "idle_threshold_sec": 120,
+  "gaming_mode_enabled": true,
+  "media_aware_idle_enabled": true,
+  "process_exclusions": [],
+  "domain_blocklist": [
+    "accounts.google.com",
+    "bank",
+    "paypal.com"
+  ],
+  "media_domains": [
+    "youtube.com",
+    "netflix.com",
+    "twitch.tv"
+  ],
+  "media_title_keywords": [
+    "youtube",
+    "netflix",
+    "twitch",
+    "watching",
+    "player",
+    "video"
+  ],
+  "sync_settings_from_server": true,
+  "settings_refresh_sec": 180,
+  "heartbeat_interval_sec": 30,
+  "parallel_presence_processes": [
+    "discord.exe",
+    "spotify.exe",
+    "steam.exe"
+  ],
+  "parallel_browser_recent_sec": 120,
+  "media_player_processes": [
+    "jellyfinmediaplayer.exe",
+    "jellyfin media player.exe",
+    "jellyfin.exe"
+  ],
+  "parallel_presence_max": 5
+}
