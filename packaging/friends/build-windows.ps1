@@ -24,8 +24,16 @@ New-Item -ItemType Directory -Force -Path $work, $specDir | Out-Null
 
 $serverEntry = Join-Path $Root "serve.py"
 $collEntry = Join-Path $Root "collector\collector.py"
+# Lazy imports inside route handlers are easy to miss; keep admin/jobs working in the .exe.
+$serverHidden = @(
+    "--hidden-import=backend.app.main",
+    "--hidden-import=backend.jobs.daily_rollup",
+    "--hidden-import=backend.jobs.discord_summary",
+    "--hidden-import=backend.jobs.maintenance",
+    "--hidden-import=backend.jobs.automation"
+)
 & $pyi --noconfirm --clean --onefile --name "ActivityTrackerServer" `
-    --distpath $dist --workpath $work --specpath $specDir $serverEntry
+    --distpath $dist --workpath $work --specpath $specDir @serverHidden $serverEntry
 & $pyi --noconfirm --clean --onefile --name "ActivityTrackerCollector" `
     --distpath $dist --workpath $work --specpath $specDir $collEntry
 

@@ -57,6 +57,7 @@ _prepare_app_directory()
 import uvicorn  # noqa: E402
 
 from backend.app.config import settings  # noqa: E402
+from backend.app.main import app as asgi_application  # noqa: E402
 
 if __name__ == "__main__":
     reload = os.environ.get("ACTIVITY_DEV_RELOAD", "").lower() in ("1", "true", "yes")
@@ -68,8 +69,11 @@ if __name__ == "__main__":
         "yes",
     ):
         _maybe_open_browser_later(settings.host, settings.port)
+    # Pass the app object when not using reload so PyInstaller bundles backend.app.main.
+    # String import alone is not traced by PyInstaller and breaks the friend .exe.
+    app_target: str | object = "backend.app.main:app" if reload else asgi_application
     uvicorn.run(
-        "backend.app.main:app",
+        app_target,
         host=settings.host,
         port=settings.port,
         reload=reload,
