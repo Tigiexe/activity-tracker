@@ -4,7 +4,7 @@ Run the API using ACTIVITY_HOST / ACTIVITY_PORT from .env.
 From the project root (developer):
   python serve.py
 
-Bundled as a Windows .exe (friend release): working directory is set to the folder
+Bundled as a Windows .exe (portable build): working directory is set to the folder
 containing the executable; a .env is created on first run with a random API key.
 """
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _prepare_app_directory() -> None:
 
 
 def _maybe_open_browser_later(host: str, port: int) -> None:
-    """Friends: open dashboard once the server is listening."""
+    """Portable build: open dashboard once the server is listening."""
     if host not in ("127.0.0.1", "localhost"):
         return
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     ):
         _maybe_open_browser_later(settings.host, settings.port)
     # Pass the app object when not using reload so PyInstaller bundles backend.app.main.
-    # String import alone is not traced by PyInstaller and breaks the friend .exe.
+    # String import alone is not traced by PyInstaller and breaks the frozen .exe.
     app_target: str | object = "backend.app.main:app" if reload else asgi_application
     uvicorn.run(
         app_target,

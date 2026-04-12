@@ -8,7 +8,7 @@ __pycache__/
 .eggs/
 dist/
 build/
-packaging/friends/.pyi-spec/
+packaging/windows-portable/.pyi-spec/
 /*.spec
 
 # Secrets & local database
