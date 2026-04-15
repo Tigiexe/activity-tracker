@@ -2,6 +2,15 @@
 
 Lightweight local-first activity tracking: a small FastAPI app plus an optional Windows collector. **You do not need a cloud server or VPS** — everything can run on one PC. Hosting on a small server is optional if you want 24/7 uptime or to collect from multiple machines.
 
+## List of features to add
+- add an arrow for left to right on the day
+- maybe some better ui on timeline, like on the details, and get rid of the ugly preset thing, also probably no need for rebuild/compact button
+- change the stats that are at the top, peak hour makes no sense for current day, session count is cool ig but no really needed, maybe make daily average take only the days where there is like at least a slight bit of activity, so it doesnt take empty days into consideration
+- check that pc_off activity isnt taken into consideration for any stats
+- research activitywatch for more features/ideas
+
+~ add phone tracking eventually
+
 ## Pick a setup
 
 | Situation | What to do |
