@@ -15,13 +15,17 @@ Low-overhead background collector for active app/window activity.
    - Optional: copy `games_list.example.txt` to **`games_list.txt`** (same folder as `config.json`). Put one game substring per line (or comma-separated); `#` starts a comment. The collector **merges** this file with the **server** list from **`/admin/games`** whenever `sync_settings_from_server` is true. Game detection is not stored in `config.json`.
 
 ## Run
-- `python collector\\collector.py`
+- `python collector\\collector.py` (console stays open; Ctrl+C to stop)
+- **System tray (no console):** install tray deps (`pystray`, `pillow` are in `requirements-windows.txt`), then either:
+  - `scripts\\run-collector-tray.bat` — starts with **`pythonw`** so no terminal window; look for the blue dot icon in the **notification area** (clock side of the taskbar; click **^** if hidden). Right‑click → **Exit** to stop.
+  - Or: `pythonw collector\\collector.py --tray`
+  - Or set **`"tray": true`** in `config.json` and run `pythonw collector\\collector.py` (no `--tray` flag needed).
 
 ## Notes
 - Collector stores unsent events in `collector\\spool\\events.jsonl`.
 - It retries upload with exponential backoff if server is unavailable.
 - It is designed to skip expensive work and keep loop overhead low.
-- Collector sends periodic heartbeats so server can detect `pc_off` periods when data stops.
+- Collector sends periodic heartbeats so the server knows the device was recently online.
 - Collector can auto-sync selected settings from server (`/admin/settings`) when `sync_settings_from_server` is true.
 - Media-aware idle is enabled by default:
   - If no input is detected but active browser tab looks like video/media playback, it is tracked as `watching` instead of `idle`.

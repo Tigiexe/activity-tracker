@@ -408,10 +408,9 @@ class Uploader(threading.Thread):
 
     def run(self) -> None:
         while not self.stop_event.is_set():
-            if self.backoff_sec > 0:
-                time.sleep(self.backoff_sec)
-            else:
-                time.sleep(self.config.upload_interval_sec)
+            delay = self.backoff_sec if self.backoff_sec > 0 else self.config.upload_interval_sec
+            if self.stop_event.wait(timeout=delay):
+                break
 
             batch = self.spool.read_batch(self.config.max_batch_size)
             if not batch:
@@ -429,7 +428,8 @@ class Uploader(threading.Thread):
         self.stop_event.set()
 
 
-def run_collector(config_path: Path) -> None:
+def run_collector(config_path: Path, stop_event: Optional[threading.Event] = None) -> None:
+    stop = stop_event if stop_event is not None else threading.Event()
     config = load_config(config_path)
     games_path = config_path.parent / GAMES_LIST_FILENAME
     config.game_match_strings = merge_game_match_strings(load_games_list_file(games_path), "")
@@ -446,120 +446,183 @@ def run_collector(config_path: Path) -> None:
     last_heartbeat = 0.0
     parallel_browser_deadline = 0.0
 
-    while True:
-        loop_started = time.perf_counter()
-        now_unix = time.time()
-        if config.sync_settings_from_server and now_unix - last_settings_sync >= config.settings_refresh_sec:
-            fetch_remote_settings(config, games_path)
-            last_settings_sync = now_unix
-        if now_unix - last_heartbeat >= config.heartbeat_interval_sec:
-            send_heartbeat(config)
-            last_heartbeat = now_unix
+    try:
+        while not stop.is_set():
+            loop_started = time.perf_counter()
+            now_unix = time.time()
+            if config.sync_settings_from_server and now_unix - last_settings_sync >= config.settings_refresh_sec:
+                fetch_remote_settings(config, games_path)
+                last_settings_sync = now_unix
+            if now_unix - last_heartbeat >= config.heartbeat_interval_sec:
+                send_heartbeat(config)
+                last_heartbeat = now_unix
 
-        now_ts = utc_now_iso()
-        idle_seconds = get_idle_seconds()
-        idle_flag = idle_seconds >= config.idle_threshold_sec
+            now_ts = utc_now_iso()
+            idle_seconds = get_idle_seconds()
+            idle_flag = idle_seconds >= config.idle_threshold_sec
 
-        window_title, process_name, exe_name, _ = get_active_window_info()
-        exe_lower = (exe_name or "").lower()
+            window_title, process_name, exe_name, _ = get_active_window_info()
+            exe_lower = (exe_name or "").lower()
 
-        if exe_lower and exe_lower in config.process_exclusions:
-            time.sleep(config.sampling_interval_default_sec)
-            prev_ts = now_ts
-            continue
+            if exe_lower and exe_lower in config.process_exclusions:
+                if stop.wait(timeout=config.sampling_interval_default_sec):
+                    break
+                prev_ts = now_ts
+                continue
 
-        url_full = None
-        url_domain = None
-        if not (config.gaming_mode_enabled and is_probable_game(exe_name, window_title, config)):
-            if exe_lower in {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}:
-                url_full, url_domain = infer_url_from_title(window_title)
-                if url_full:
-                    parsed = urlparse(url_full)
-                    url_domain = parsed.netloc.lower() if parsed.netloc else url_domain
-
-        if url_domain and any(block in url_domain for block in config.domain_blocklist):
             url_full = None
             url_domain = None
+            if not (config.gaming_mode_enabled and is_probable_game(exe_name, window_title, config)):
+                if exe_lower in {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}:
+                    url_full, url_domain = infer_url_from_title(window_title)
+                    if url_full:
+                        parsed = urlparse(url_full)
+                        url_domain = parsed.netloc.lower() if parsed.netloc else url_domain
 
-        media_active = is_media_playback(exe_name, window_title, url_domain, config)
-        if config.media_aware_idle_enabled and idle_flag and media_active:
-            # Keep passive video watching from being counted as idle.
-            idle_flag = False
+            if url_domain and any(block in url_domain for block in config.domain_blocklist):
+                url_full = None
+                url_domain = None
 
-        activity_type = classify_activity(exe_name, process_name, window_title, idle_flag, config)
-        if media_active and activity_type == "browser":
-            activity_type = "watching"
-        if media_active and activity_type == "other" and exe_lower in config.media_player_processes:
-            activity_type = "watching"
+            media_active = is_media_playback(exe_name, window_title, url_domain, config)
+            if config.media_aware_idle_enabled and idle_flag and media_active:
+                # Keep passive video watching from being counted as idle.
+                idle_flag = False
 
-        now_wall = time.time()
-        if activity_type == "game":
-            parallel_browser_deadline = 0.0
-        elif exe_lower in BROWSER_EXES:
-            parallel_browser_deadline = now_wall + float(config.parallel_browser_recent_sec)
-        allow_parallel_browser = (
-            config.parallel_browser_recent_sec > 0
-            and parallel_browser_deadline > now_wall
-            and activity_type != "game"
-        )
+            activity_type = classify_activity(exe_name, process_name, window_title, idle_flag, config)
+            if media_active and activity_type == "browser":
+                activity_type = "watching"
+            if media_active and activity_type == "other" and exe_lower in config.media_player_processes:
+                activity_type = "watching"
 
-        if now_ts == prev_ts:
-            time.sleep(1)
-            continue
+            now_wall = time.time()
+            if activity_type == "game":
+                parallel_browser_deadline = 0.0
+            elif exe_lower in BROWSER_EXES:
+                parallel_browser_deadline = now_wall + float(config.parallel_browser_recent_sec)
+            allow_parallel_browser = (
+                config.parallel_browser_recent_sec > 0
+                and parallel_browser_deadline > now_wall
+                and activity_type != "game"
+            )
 
-        parallel_apps: List[str] = []
-        if config.parallel_presence_processes:
-            wanted = set(config.parallel_presence_processes)
-            active_name = (exe_name or "").lower()
-            seen = set()
-            try:
-                for proc in psutil.process_iter(["name"]):
-                    name = (proc.info.get("name") or "").lower()
-                    if not name or name == active_name or name not in wanted or name in seen:
-                        continue
-                    if name in BROWSER_EXES and not allow_parallel_browser:
-                        continue
-                    seen.add(name)
-                    parallel_apps.append(name)
-                    if len(parallel_apps) >= config.parallel_presence_max:
-                        break
-            except (psutil.Error, OSError):
-                parallel_apps = []
+            if now_ts == prev_ts:
+                if stop.wait(timeout=1):
+                    break
+                continue
 
-        event = {
-            "ts_start": prev_ts,
-            "ts_end": now_ts,
-            "device_id": config.device_id,
-            "app_name": exe_name,
-            "process_name": process_name,
-            "window_title": window_title,
-            "url_full": url_full,
-            "url_domain": url_domain,
-            "activity_type": activity_type,
-            "idle_flag": bool(idle_flag),
-            "source": "windows_collector",
-            "parallel_apps": parallel_apps,
-        }
-        spool.append_many([event])
-        prev_ts = now_ts
+            parallel_apps: List[str] = []
+            if config.parallel_presence_processes:
+                wanted = set(config.parallel_presence_processes)
+                active_name = (exe_name or "").lower()
+                seen = set()
+                try:
+                    for proc in psutil.process_iter(["name"]):
+                        name = (proc.info.get("name") or "").lower()
+                        if not name or name == active_name or name not in wanted or name in seen:
+                            continue
+                        if name in BROWSER_EXES and not allow_parallel_browser:
+                            continue
+                        seen.add(name)
+                        parallel_apps.append(name)
+                        if len(parallel_apps) >= config.parallel_presence_max:
+                            break
+                except (psutil.Error, OSError):
+                    parallel_apps = []
 
-        signature = f"{exe_name}|{window_title}|{url_domain}|{activity_type}|{idle_flag}"
-        if signature != last_signature:
-            last_signature = signature
-            last_change = time.time()
+            event = {
+                "ts_start": prev_ts,
+                "ts_end": now_ts,
+                "device_id": config.device_id,
+                "app_name": exe_name,
+                "process_name": process_name,
+                "window_title": window_title,
+                "url_full": url_full,
+                "url_domain": url_domain,
+                "activity_type": activity_type,
+                "idle_flag": bool(idle_flag),
+                "source": "windows_collector",
+                "parallel_apps": parallel_apps,
+            }
+            spool.append_many([event])
+            prev_ts = now_ts
 
-        stable_for = time.time() - last_change
-        if config.gaming_mode_enabled and activity_type == "game":
-            next_sleep = config.sampling_interval_game_sec
-        elif stable_for >= config.stable_after_sec:
-            next_sleep = config.sampling_interval_stable_sec
-        else:
-            next_sleep = config.sampling_interval_default_sec
+            signature = f"{exe_name}|{window_title}|{url_domain}|{activity_type}|{idle_flag}"
+            if signature != last_signature:
+                last_signature = signature
+                last_change = time.time()
 
-        loop_ms = (time.perf_counter() - loop_started) * 1000
-        if loop_ms > 50:
-            next_sleep = max(next_sleep, 8)
-        time.sleep(next_sleep)
+            stable_for = time.time() - last_change
+            if config.gaming_mode_enabled and activity_type == "game":
+                next_sleep = config.sampling_interval_game_sec
+            elif stable_for >= config.stable_after_sec:
+                next_sleep = config.sampling_interval_stable_sec
+            else:
+                next_sleep = config.sampling_interval_default_sec
+
+            loop_ms = (time.perf_counter() - loop_started) * 1000
+            if loop_ms > 50:
+                next_sleep = max(next_sleep, 8)
+            if stop.wait(timeout=next_sleep):
+                break
+    finally:
+        uploader.stop()
+
+
+def _tray_icon_image():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.ellipse((6, 6, 58, 58), fill=(37, 99, 235, 255))
+    d.ellipse((22, 22, 42, 42), fill=(255, 255, 255, 255))
+    return im
+
+
+def run_collector_tray(config_path: Path) -> None:
+    """Windows notification-area icon; collector runs on a worker thread."""
+    import pystray
+
+    stop = threading.Event()
+    thread_exc: List[BaseException] = []
+
+    def worker() -> None:
+        try:
+            run_collector(config_path, stop_event=stop)
+        except BaseException as exc:
+            thread_exc.append(exc)
+
+    collector_thread = threading.Thread(target=worker, name="collector-main", daemon=False)
+    collector_thread.start()
+
+    def on_exit(icon: pystray.Icon, _item: object) -> None:
+        stop.set()
+        icon.stop()
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Activity Tracker collector", None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Exit", on_exit),
+    )
+    icon = pystray.Icon(
+        "activity_tracker_collector",
+        _tray_icon_image(),
+        "Activity Tracker — collecting",
+        menu,
+    )
+    icon.run()
+    collector_thread.join(timeout=20.0)
+    if thread_exc:
+        raise thread_exc[0]
+
+
+def _want_tray_mode(config_path: Path) -> bool:
+    if "--tray" in sys.argv:
+        return True
+    try:
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return bool(raw.get("tray"))
 
 
 if __name__ == "__main__":
@@ -572,4 +635,12 @@ if __name__ == "__main__":
         raise SystemExit(
             "Missing config.json next to the collector (copy from collector/config.example.json)."
         )
-    run_collector(cfg)
+    if _want_tray_mode(cfg):
+        try:
+            run_collector_tray(cfg)
+        except ImportError as e:
+            raise SystemExit(
+                "Tray mode requires pystray and pillow. Install: pip install pystray pillow"
+            ) from e
+    else:
+        run_collector(cfg)
