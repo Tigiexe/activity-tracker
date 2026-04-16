@@ -225,7 +225,6 @@ def build_day_sessions(
     conn,
     day_local,
     tz,
-    include_pc_off: bool = True,
 ):
     setting_map = get_setting_map(conn)
     game_infer_strings = [
@@ -389,7 +388,7 @@ def build_day_sessions(
                         if (
                             frag["activity"] != dominant_activity
                             and frag["duration"] <= algo["bridge_interrupt_sec"]
-                            and frag["activity"] not in {"idle", "pc_off"}
+                            and frag["activity"] != "idle"
                         ):
                             frag["activity"] = dominant_activity
                             rewritten = True
@@ -413,41 +412,6 @@ def build_day_sessions(
                     i = max(0, i - 1)
                     continue
             i += 1
-
-
-    if include_pc_off:
-        with_off = []
-        pc_off_threshold = 300
-        for idx, item in enumerate(sessions):
-            with_off.append(item)
-            if idx + 1 < len(sessions):
-                nxt = sessions[idx + 1]
-                gap = int((nxt["start_dt"] - item["end_dt"]).total_seconds())
-                if gap > pc_off_threshold:
-                    with_off.append(
-                        {
-                            "start_dt": item["end_dt"],
-                            "end_dt": nxt["start_dt"],
-                            "duration": gap,
-                            "activity": "pc_off",
-                            "app": "(offline)",
-                            "title": "No collector data",
-                        }
-                    )
-        if sessions and is_today:
-            tail_gap = int((now_utc - sessions[-1]["end_dt"]).total_seconds())
-            if tail_gap > pc_off_threshold:
-                with_off.append(
-                    {
-                        "start_dt": sessions[-1]["end_dt"],
-                        "end_dt": now_utc,
-                        "duration": tail_gap,
-                        "activity": "pc_off",
-                        "app": "(offline)",
-                        "title": "No collector data",
-                    }
-                )
-        sessions = with_off
 
     # Build activity windows for layered timeline view.
     # Foreground events always contribute; selected background apps only extend activity windows.
@@ -753,7 +717,6 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
             conn=conn_tl,
             day_local=selected_day_local,
             tz=tz,
-            include_pc_off=True,
         )
     finally:
         conn_tl.close()
@@ -861,7 +824,27 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
         for s in top_sessions
     ) or "<tr><td colspan='5'>No sessions yet</td></tr>"
 
-    peak_hour = max(hourly_totals.items(), key=lambda x: x[1])[0] if hourly_totals else None
+    # Ignore very-early carryover when deriving "first activity" for the selected day.
+    day_start_local = datetime.combine(selected_day_local, datetime.min.time(), tzinfo=tz)
+    carryover_cutoff = day_start_local + timedelta(hours=5)
+    local_sessions = [
+        {
+            **s,
+            "start_local": s["start_dt"].astimezone(tz),
+            "end_local": s["end_dt"].astimezone(tz),
+        }
+        for s in sessions
+    ]
+    day_sessions_after_cutoff = [s for s in local_sessions if s["end_local"] >= carryover_cutoff]
+    metric_sessions = day_sessions_after_cutoff or local_sessions
+    if metric_sessions:
+        first_activity_txt = min(s["start_local"] for s in metric_sessions).strftime("%H:%M")
+        last_activity_txt = max(s["end_local"] for s in metric_sessions).strftime("%H:%M")
+        first_last_activity_txt = f"{first_activity_txt} - {last_activity_txt}"
+    else:
+        first_last_activity_txt = "--:-- - --:--"
+    avg_session_sec = int(sum(s["duration"] for s in sessions) / len(sessions)) if sessions else 0
+
     max_hour_secs = max(hourly_totals.values()) if hourly_totals else 1
     heatmap_html = "".join(
         f"<tr><td>{hour:02d}:00</td><td><div class='bar-wrap'><div class='bar' style='width:{max(2, int((hourly_totals.get(hour, 0) / max_hour_secs) * 100))}%;'></div></div></td><td>{fmt_secs(hourly_totals.get(hour, 0))}</td></tr>"
@@ -902,6 +885,9 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
             day_totals[s.astimezone(tz).date().isoformat()] += dur
 
     selected_iso = selected_day_local.isoformat()
+    prev_iso = (selected_day_local - timedelta(days=1)).isoformat()
+    next_iso = (selected_day_local + timedelta(days=1)).isoformat()
+    today_iso = datetime.now(tz).date().isoformat()
     week_start = selected_day_local - timedelta(days=selected_day_local.weekday())
     week_days = [(week_start + timedelta(days=i)).isoformat() for i in range(7)]
     week_total = sum(day_totals.get(d, 0) for d in week_days)
@@ -909,19 +895,23 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
     month_total = sum(v for k, v in day_totals.items() if k.startswith(month_prefix))
     last14 = [selected_day_local - timedelta(days=i) for i in range(13, -1, -1)]
     max_day = max([day_totals.get(d.isoformat(), 0) for d in last14] + [1])
+    active14 = [day_totals.get(d.isoformat(), 0) for d in last14 if day_totals.get(d.isoformat(), 0) >= 600]
+    daily_avg_14_sec = int(sum(active14) / len(active14)) if active14 else 0
     trend14_html = "".join(
         f"<tr><td>{d.strftime('%m-%d')}</td><td><div class='bar-wrap'><div class='bar' style='width:{max(2, int((day_totals.get(d.isoformat(), 0) / max_day) * 100))}%;'></div></div></td><td>{fmt_secs(day_totals.get(d.isoformat(), 0))}</td></tr>"
         for d in last14
     )
 
+    status_colors = {"online": "#22c55e", "offline": "#ef4444"}
     device_status_rows = []
     for device in device_rows:
         last_seen = parse_iso(device["last_seen"])
         seconds_since = int((now_utc - last_seen).total_seconds()) if last_seen else 999999
         is_online = seconds_since <= 90
-        status_text = "online" if is_online else "pc_off"
+        status_text = "online" if is_online else "offline"
+        status_color = status_colors.get(status_text, "#64748b")
         device_status_rows.append(
-            f"<tr><td>{escape(device['device_id'])}</td><td>{escape(device['platform'])}</td><td><span class='pill' style='background:{category_colors.get(status_text, '#64748b')}22;border-color:{category_colors.get(status_text, '#64748b')}66;color:{category_colors.get(status_text, '#cbd5e1')}'>{status_text}</span></td><td>{fmt_secs(seconds_since)} ago</td></tr>"
+            f"<tr><td>{escape(device['device_id'])}</td><td>{escape(device['platform'])}</td><td><span class='pill' style='background:{status_color}22;border-color:{status_color}66;color:{status_color}'>{status_text}</span></td><td>{fmt_secs(seconds_since)} ago</td></tr>"
         )
     device_status_html = "".join(device_status_rows) or "<tr><td colspan='4'>No devices seen yet</td></tr>"
 
@@ -972,27 +962,51 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
             border: 1px solid #475569; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.15);
           }}
           .btn-tl-compact:hover {{ border-color: #94a3b8; filter: brightness(1.08); }}
+          .tl-help {{
+            display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+            border-radius: 999px; border: 1px solid #64748b; color: #cbd5e1; font-size: 12px; font-weight: 700;
+            cursor: help;
+          }}
+          .date-nav {{ display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }}
+          .date-nav form {{ display: flex; align-items: center; gap: 8px; margin: 0; }}
+          .date-nav a {{
+            display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 34px;
+            border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; background: #0b1220; text-decoration: none;
+          }}
+          .date-nav a:hover {{ border-color: #60a5fa; background: #0f172a; }}
+          .date-nav .today-link {{ min-width: 58px; padding: 0 10px; font-size: 12px; font-weight: 600; }}
+          .date-nav .date-input {{
+            height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0;
+          }}
+          .date-nav .go-btn {{
+            height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff;
+          }}
         </style>
       </head>
       <body>
         <h1>Activity Tracker</h1>
         <p class="muted">Date: {selected_iso} ({escape(str(tz))}) | Tracked: {fmt_secs(total_seconds)} | Events: {len(timeline)} | <a href="/explorer">Session explorer</a> | <a href="/stats">Stats</a> | <a href="/admin/rules">Manage categories & rules</a> | <a href="/admin/settings">Settings</a></p>
-        <form method="get" action="/" style="margin-bottom: 14px;">
+        <div class="date-nav">
+          <form method="get" action="/">
           <label class="muted">View date:</label>
-          <input type="date" name="date" value="{selected_iso}" style="margin:0 8px; padding:6px; border-radius:8px; border:1px solid #334155; background:#0b1220; color:#e2e8f0;" />
-          <button type="submit" style="padding:6px 10px; border-radius:8px; border:1px solid #1d4ed8; background:#1d4ed8; color:#fff;">Go</button>
-        </form>
+          <a href="/?date={prev_iso}" title="Previous day" aria-label="Previous day">←</a>
+          <input class="date-input" type="date" name="date" value="{selected_iso}" />
+          <a href="/?date={next_iso}" title="Next day" aria-label="Next day">→</a>
+          <button class="go-btn" type="submit">Go</button>
+          </form>
+          <a class="today-link" href="/?date={today_iso}" title="Jump to today">Today</a>
+        </div>
         <div class="metrics">
           <div class="metric"><div class="label">Longest session</div><div class="value">{fmt_secs(top_sessions[0]["duration"]) if top_sessions else "0s"}</div></div>
-          <div class="metric"><div class="label">Peak hour</div><div class="value">{f"{peak_hour:02d}:00" if peak_hour is not None else "--:--"}</div></div>
-          <div class="metric"><div class="label">Session count</div><div class="value">{len(sessions)}</div></div>
+          <div class="metric"><div class="label">Today's activity window</div><div class="value">{first_last_activity_txt}</div></div>
+          <div class="metric"><div class="label">Avg session length</div><div class="value">{fmt_secs(avg_session_sec)}</div></div>
           <div class="metric"><div class="label">Active-day streak</div><div class="value">{streak}d</div></div>
         </div>
         <div class="metrics">
           <div class="metric"><div class="label">Selected day</div><div class="value">{fmt_secs(day_totals.get(selected_iso, 0))}</div></div>
           <div class="metric"><div class="label">Week total</div><div class="value">{fmt_secs(week_total)}</div></div>
           <div class="metric"><div class="label">Month total</div><div class="value">{fmt_secs(month_total)}</div></div>
-          <div class="metric"><div class="label">Daily average (14d)</div><div class="value">{fmt_secs(int(sum(day_totals.get(d.isoformat(), 0) for d in last14) / 14))}</div></div>
+          <div class="metric"><div class="label">Daily average (14d, active days)</div><div class="value">{fmt_secs(daily_avg_14_sec)}</div></div>
         </div>
         <div class="grid">
           <div class="card">
@@ -1024,17 +1038,12 @@ def dashboard_today(date: str | None = Query(default=None)) -> str:
             <input type="hidden" name="day" value="{selected_iso}" />
             <label class="muted">Preset:</label>
             <select name="preset_name" style="padding:7px 10px; border-radius:8px; border:1px solid #334155; background:#0b1220; color:#e2e8f0;">
-              <option value="legacy" {'selected' if current_preset == 'legacy' else ''}>Legacy</option>
               <option value="conservative" {'selected' if current_preset == 'conservative' else ''}>Conservative</option>
               <option value="balanced" {'selected' if current_preset == 'balanced' else ''}>Balanced</option>
               <option value="aggressive" {'selected' if current_preset == 'aggressive' else ''}>Aggressive</option>
             </select>
             <button type="submit" class="btn-tl btn-tl-apply">Apply preset</button>
-            <span class="muted">Current: same_app={preview_merge_same_app}, browser_gap={preview_gap_browser}s, bridge={preview_bridge}s, min_frag={preview_min_fragment}s, dom={preview_dom_threshold}%</span>
-          </form>
-          <form method="post" action="/admin/timeline/compact-day">
-            <input type="hidden" name="day" value="{selected_iso}" />
-            <button type="submit" class="btn-tl btn-tl-compact">Rebuild / compact this day</button>
+            <span class="tl-help" title="Current preset settings: same_app={preview_merge_same_app}, browser_gap={preview_gap_browser}s, bridge={preview_bridge}s, min_frag={preview_min_fragment}s, dom={preview_dom_threshold}%">?</span>
           </form>
           </div>
           <div class="timeline-wrap" id="timelineWrap" style="height:{timeline_height_px}px;">
@@ -1434,22 +1443,9 @@ def compact_timeline_day(day: str = Form(...)):
 
 @app.post("/admin/timeline/apply-preset")
 def apply_timeline_preset(preset_name: str = Form(...), day: str = Form("")):
+    # Legacy preset intentionally removed from selectable options.
+    # Previous values retained in git history if needed later.
     presets = {
-        "legacy": {
-            # Mimics older behavior before stronger dominance compression.
-            "timeline_merge_require_same_app": "false",
-            "timeline_merge_gap_game_sec": "600",
-            "timeline_merge_gap_watching_sec": "900",
-            "timeline_merge_gap_coding_sec": "300",
-            "timeline_merge_gap_browser_sec": "300",
-            "timeline_merge_gap_other_sec": "180",
-            "timeline_merge_gap_idle_sec": "60",
-            "timeline_bridge_interrupt_sec": "300",
-            "timeline_min_fragment_sec": "300",
-            "timeline_dominance_window_sec": "3600",
-            "timeline_dominance_threshold_pct": "100",
-            "timeline_dominance_min_block_sec": "999999",
-        },
         "conservative": {
             "timeline_merge_require_same_app": "false",
             "timeline_merge_gap_game_sec": "420",
@@ -1568,7 +1564,7 @@ def timeline_day(day: str | None = None) -> dict:
             target_day = datetime.fromisoformat(day).date() if day else datetime.now(tz).date()
         except ValueError:
             target_day = datetime.now(tz).date()
-        timeline_data = build_day_sessions(conn=conn, day_local=target_day, tz=tz, include_pc_off=True)
+        timeline_data = build_day_sessions(conn=conn, day_local=target_day, tz=tz)
     finally:
         conn.close()
     sessions = timeline_data["primary"]
