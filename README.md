@@ -8,6 +8,7 @@ Lightweight local-first activity tracking: a small FastAPI app plus an optional 
 - ~~change the stats that are at the top, peak hour makes no sense for current day, session count is cool ig but no really needed, maybe make daily average take only the days where there is like at least a slight bit of activity, so it doesnt take empty days into consideration~~
 - ~~check that pc_off activity isnt taken into consideration for any stats~~
 - research activitywatch for more features/ideas
+- game activity on timeline should be split by game/app not merged to any game of the same activity so that if i switch games it doesnt stay as the same activity, it should make a break there
 
 ~ add phone tracking eventually
 
