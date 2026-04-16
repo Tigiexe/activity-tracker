@@ -39,6 +39,14 @@ def _hex_to_rgb(value: str, fallback=(100, 116, 139)):
         return fallback
 
 
+def _text_color_for_bg(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Pick black/white text based on relative luminance for contrast."""
+    r, g, b = rgb
+    # Perceived brightness approximation; higher means lighter background.
+    luminance = (0.299 * r) + (0.587 * g) + (0.114 * b)
+    return (15, 23, 42) if luminance >= 150 else (248, 250, 252)
+
+
 def _render_timeline_png(day_iso: str, tz, layered_segments: list, activity_colors: dict) -> str:
     lane_count = 5
     lanes = [[] for _ in range(lane_count)]
@@ -64,23 +72,51 @@ def _render_timeline_png(day_iso: str, tz, layered_segments: list, activity_colo
     lane_h = 22
     lane_gap = 12
 
+    day_local = datetime.fromisoformat(day_iso).date()
+    day_start_local = datetime.combine(day_local, datetime.min.time(), tzinfo=tz)
+
+    # Zoom to actual activity extent for better readability in Discord.
+    if layered_segments:
+        all_local_starts = [s["start_dt"].astimezone(tz) for s in layered_segments]
+        all_local_ends = [s["end_dt"].astimezone(tz) for s in layered_segments]
+        range_start_sec = max(0, int((min(all_local_starts) - day_start_local).total_seconds()))
+        range_end_sec = min(86400, int((max(all_local_ends) - day_start_local).total_seconds()))
+        if range_end_sec <= range_start_sec:
+            range_start_sec, range_end_sec = 0, 86400
+    else:
+        range_start_sec, range_end_sec = 0, 86400
+
+    range_span = max(1, range_end_sec - range_start_sec)
+
+    def sec_to_x(sec: int) -> int:
+        rel = (sec - range_start_sec) / range_span
+        rel = max(0.0, min(1.0, rel))
+        return left + int(rel * (right - left))
+
+    range_label = (
+        f"{(day_start_local + timedelta(seconds=range_start_sec)).strftime('%H:%M')} - "
+        f"{(day_start_local + timedelta(seconds=range_end_sec)).strftime('%H:%M')}"
+    )
     draw.text((left, 24), f"Activity Timeline - {day_iso}", fill=(226, 232, 240), font=font)
-    draw.text((left, 44), f"Timezone: {tz}", fill=(148, 163, 184), font=font)
+    draw.text((left, 44), f"Timezone: {tz} | Range: {range_label}", fill=(148, 163, 184), font=font)
 
     for idx in range(used_lane_count):
         y = top + idx * (lane_h + lane_gap)
         draw.rounded_rectangle((left, y, right, y + lane_h), radius=6, fill=(15, 23, 42), outline=(51, 65, 85), width=1)
         draw.text((24, y + 5), f"L{idx+1}", fill=(148, 163, 184), font=font)
 
-    # hour guides (same 24h structure as dashboard)
-    for h in range(25):
-        x = left + int((h / 24) * (right - left))
+    # Adaptive guides based on displayed range (roughly 7 ticks).
+    tick_count = 6
+    for i in range(tick_count + 1):
+        sec = range_start_sec + int((i / tick_count) * range_span)
+        x = sec_to_x(sec)
         draw.line((x, top - 8, x, top + (used_lane_count * (lane_h + lane_gap))), fill=(45, 55, 72), width=1)
-        if h % 3 == 0:
-            draw.text((x - 14, top - 22), f"{h:02d}:00", fill=(148, 163, 184), font=font)
-
-    day_local = datetime.fromisoformat(day_iso).date()
-    day_start_local = datetime.combine(day_local, datetime.min.time(), tzinfo=tz)
+        draw.text(
+            (x - 14, top - 22),
+            (day_start_local + timedelta(seconds=sec)).strftime("%H:%M"),
+            fill=(148, 163, 184),
+            font=font,
+        )
 
     for lane_idx, lane in enumerate(lanes):
         if lane_idx >= used_lane_count:
@@ -95,14 +131,14 @@ def _render_timeline_png(day_iso: str, tz, layered_segments: list, activity_colo
             end_sec = max(0, min(86400, end_sec))
             if end_sec <= start_sec:
                 continue
-            x1 = left + int((start_sec / 86400) * (right - left))
-            x2 = left + int((end_sec / 86400) * (right - left))
+            x1 = sec_to_x(start_sec)
+            x2 = sec_to_x(end_sec)
             rgb = _hex_to_rgb(activity_colors.get(seg["activity"], "#64748b"))
             draw.rounded_rectangle((x1, y + 2, max(x1 + 2, x2), y + lane_h - 2), radius=5, fill=rgb)
             # Show app labels on longer blocks for readability.
             if (x2 - x1) > 90:
                 app = (seg.get("app") or "").strip() or seg["activity"]
-                draw.text((x1 + 4, y + 6), app[:20], fill=(248, 250, 252), font=font)
+                draw.text((x1 + 4, y + 6), app[:24], fill=_text_color_for_bg(rgb), font=font)
 
     legend_y = top + used_lane_count * (lane_h + lane_gap) + 20
     draw.text((left, legend_y), "Top activities:", fill=(148, 163, 184), font=font)
